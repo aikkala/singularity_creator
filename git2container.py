@@ -4,13 +4,13 @@ import subprocess
 
 
 # Define parts of the definition file
-def_header = 
+def_header = \
 """BootStrap: docker
 From: continuumio/miniconda3
 
 """
 
-def_files_hdr = 
+def_files_hdr = \
 """%files
 
     # In general this isn't a good idea. We'll remove these ssh-keys later on in
@@ -18,13 +18,15 @@ def_files_hdr =
     # YOU SHOULD NOT SHARE THE PRODUCED CONTAINER WITH ANYONE
 """
 
-def_files_ssh_key = """{SSH_KEY_FILE} /root/.ssh/"""
+def_files_ssh_key = \
+"""    {SSH_KEY_FILE} /root/.ssh/
+"""
 
-def_files_known_hosts ="""{KNOWN_HOSTS_FILE} /root/.ssh/"""
+def_files_known_hosts = \
+"""    {KNOWN_HOSTS_FILE} /root/.ssh/
+"""
 
-empty_line = """ """
-
-def_post =
+def_post = \
 """%post
 
     # Create a new directory for project
@@ -36,7 +38,7 @@ def_post =
     # Git clone the project
     GIT_PROJECT_NAME=`echo {GIT_PROJECT} | cut -d "/" -f 2 | cut -d "." -f 1`
     echo "Cloning project {GIT_PROJECT} into folder /Workspace/${{GIT_PROJECT_NAME}}"
-    git clone ${{GIT_PROJECT}} && cd ${{GIT_PROJECT_NAME}}
+    git clone {GIT_PROJECT} && cd ${{GIT_PROJECT_NAME}}
 
     # Update base Anaconda environment with the yaml file
     /opt/conda/bin/conda env update --name base --file {ANACONDA_ENV_FILE}
@@ -45,27 +47,29 @@ def_post =
     echo "conda activate" >> $SINGULARITY_ENVIRONMENT
     echo "export PYTHONPATH=/Workspace/${{GIT_PROJECT_NAME}}:${{PYTHONPATH}}" >> $SINGULARITY_ENVIRONMENT
     echo "export PROJECT_DIR=/Workspace/${{GIT_PROJECT_NAME}}" >> $SINGULARITY_ENVIRONMENT
+
 """
 
-def_remove_ssh =
-"""
-    # Remove the ssh keys
+def_remove_ssh = \
+"""    # Remove the ssh keys
     rm -rf /root/.ssh
+
 """
 
-def_runscript = 
+def_runscript = \
 """%runscript
 
     cd ${{PROJECT_DIR}}
-    exec "$@
+    exec "$@"
 
-""""
+"""
 
-def_environment = 
+def_environment = \
 """%environment
     export LD_PRELOAD=\"\""""
 
-def main(output_dir, git_project, anaconda_env_file, ssh_key_file=None, known_hosts_file=None):
+
+def main(output_dir, git_project, anaconda_env_file="conda_env.yaml", ssh_key_file=None, known_hosts_file=None):
 
     # Build the definition file
     definition = def_header
@@ -75,8 +79,8 @@ def main(output_dir, git_project, anaconda_env_file, ssh_key_file=None, known_ho
         if ssh_key_file is not None:
             definition += def_files_ssh_key
         if known_hosts_file is not None:
-            definition += def_known_hosts
-        defition += empty_line
+            definition += def_files_known_hosts
+        definition += "\n"
 
         definition += def_post
         definition += def_remove_ssh
@@ -87,18 +91,23 @@ def main(output_dir, git_project, anaconda_env_file, ssh_key_file=None, known_ho
     definition += def_runscript
     definition += def_environment
 
+    # If an ssh key wasn't given, we could check here whether the repo is private or not; if it's private
+    # ask the user for a ssh key file
+    # TODO
+
     # Create the definition file and save it into output_dir
     # Use "Singularity" as the definition filename in case we want to use this for singularity-hub
     definition_file = os.path.join(output_dir, "Singularity")
-    container_file = os.path.join(output_dir, git_project_name)
+    os.makedirs(output_dir, exist_ok=True)
     with open(definition_file, 'w') as file:
         file.write(definition.format(GIT_PROJECT=git_project, ANACONDA_ENV_FILE=anaconda_env_file,
                                      SSH_KEY_FILE=ssh_key_file, KNOWN_HOSTS_FILE=known_hosts_file))
 
     # Build the singularity container
+    container_file = os.path.join(output_dir, "container.sif")
     subprocess.run(["singularity", "build", "--fakeroot", container_file, definition_file])
 
 
 if __name__ == "__main__":
-    main(sys.argv)
+    main(*sys.argv[1:])
 
