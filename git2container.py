@@ -1,6 +1,7 @@
 import sys
 import os
 import subprocess
+import argparse
 
 
 # Define parts of the definition file
@@ -69,7 +70,7 @@ def_environment = \
     export LD_PRELOAD=\"\""""
 
 
-def main(output_dir, git_project, anaconda_env_file="conda_env.yaml", ssh_key_file=None, known_hosts_file=None):
+def main(output_dir, git_project, anaconda_env_file, ssh_key_file, known_hosts_file):
 
     # Build the definition file
     definition = def_header
@@ -109,5 +110,17 @@ def main(output_dir, git_project, anaconda_env_file="conda_env.yaml", ssh_key_fi
 
 
 if __name__ == "__main__":
-    main(*sys.argv[1:])
+
+    # Parse arguments
+    parser = argparse.ArgumentParser(
+        description="Download a Git project and make it into a Singularity container with an Anaconda environment.")
+    parser.add_argument('--output-dir', type=str, help='Location where the Singularity container will be created', default=".")
+    parser.add_argument('--git-url', type=str, help='Git project''s url as SSH or HTML', required=True)
+    parser.add_argument('--env-file', type=str, help='Anaconda environment yaml file location in the project (as a relative path)', required=True)
+    parser.add_argument('--ssh-key-file', type=str, help='Location of SSH key file if downloading a private Git repository', default=None)
+    parser.add_argument('--known-hosts-file', type=str, help='Location of known hosts file for non-interactive build', default=None)
+    args = parser.parse_args(sys.argv[1:])
+
+    # Run the script
+    main(args.output_dir, args.git_url, args.env_file, args.ssh_key_file, args.known_hosts_file)
 
